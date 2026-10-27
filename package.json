@@ -1,0 +1,14 @@
+{
+  "name": "gti700-lab1-iot-web",
+  "version": "1.0.0",
+  "description": "Back-end and front-end for GTI700 lab 1 IoT and web services",
+  "main": "backend.js",
+  "scripts": {
+    "backend": "node backend.js",
+    "frontend": "node frontend.js",
+    "start": "node backend.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2"
+  }
+}
