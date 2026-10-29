@@ -1,4 +1,10 @@
+const { spawn } = require('child_process');
+const path = require('path');
+const readline = require('readline');
+
 const MAX_HISTORY = 720;
+
+let lastCycle = null;
 
 const sensorState = {
   temp: { history: [], lastValue: null },
@@ -46,7 +52,7 @@ function readSensor(type) {
   throw new Error(`Unknown sensor type: ${type}`);
 }
 
-function startSensorLoop(intervalMs = 3000) {
+function startSimulatedLoop(intervalMs) {
   const sample = () => {
     addValue('temp', readSensor('temp'));
     addValue('hum', readSensor('hum'));
@@ -54,6 +60,59 @@ function startSensorLoop(intervalMs = 3000) {
 
   sample();
   return setInterval(sample, intervalMs);
+}
+
+// Lance messages.py (labo 3) en mode affichage seul : il imprime un JSON F2
+// par ligne sur stdout (sequence, timestamp, temperature, humidite, bouton, tactile, son).
+function startRealSensor(onFailure) {
+  const python = process.env.PYTHON || 'python3';
+  const script = path.join(__dirname, 'messages.py');
+  const child = spawn(python, ['-u', script, '--format', 'F2'], { cwd: __dirname });
+
+  readline.createInterface({ input: child.stdout }).on('line', (line) => {
+    let cycle;
+    try {
+      cycle = JSON.parse(line);
+    } catch {
+      return;
+    }
+    lastCycle = cycle;
+    // DHT11 : lecture invalide => valeurs null, on ne les ajoute pas à l'historique.
+    if (cycle.temperature !== null) {
+      addValue('temp', cycle.temperature);
+    }
+    if (cycle.humidite !== null) {
+      addValue('hum', cycle.humidite);
+    }
+  });
+
+  child.stderr.on('data', (data) => process.stderr.write(`[messages.py] ${data}`));
+
+  let failed = false;
+  const fail = (reason) => {
+    if (failed) {
+      return;
+    }
+    failed = true;
+    console.error(`Capteurs réels indisponibles (${reason}), passage en mode simulé.`);
+    onFailure();
+  };
+  child.on('error', (err) => fail(err.message));
+  child.on('exit', (code) => fail(`messages.py terminé avec le code ${code}`));
+
+  process.on('exit', () => child.kill());
+  return child;
+}
+
+function startSensorLoop(intervalMs = 3000) {
+  if (process.env.SENSOR_MODE === 'sim' || process.platform !== 'linux') {
+    return startSimulatedLoop(intervalMs);
+  }
+  return startRealSensor(() => startSimulatedLoop(intervalMs));
+}
+
+function getLastCycle() {
+  return lastCycle;
 }
 
 function getLast(type) {
@@ -85,4 +144,5 @@ module.exports = {
   getLast,
   getHistory,
   getAverage,
+  getLastCycle,
 };
