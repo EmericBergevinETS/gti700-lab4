@@ -70,6 +70,8 @@ def main():
     parser.add_argument("--port", type=int,
                         help="Port TCP (défaut 5000) ou canal RFCOMM (défaut 1)")
     parser.add_argument("--count", type=int, default=30, help="Nombre de messages à envoyer (>= 30)")
+    parser.add_argument("--interval", type=float, default=2.0,
+                        help="Délai entre deux lectures du capteur, en secondes (défaut 2)")
     parser.add_argument("--lot", type=int, default=10,
                         help="Nombre de cycles par message F3 (défaut 10 ; "
                              "20 donne ~2100 octets, assez pour forcer la fragmentation)")
@@ -82,6 +84,8 @@ def main():
         parser.error("Avec --host, choisis F1, F2 ou F3 pour une campagne distincte.")
     if args.count < 1 or args.port < 1 or (args.liaison == "wifi" and args.port > 65535):
         parser.error("Il faut --count >= 1 et un port/canal valide.")
+    if args.interval <= 0:
+        parser.error("Il faut --interval > 0.")
 
     import RPi.GPIO as GPIO
     import humid
@@ -129,7 +133,7 @@ def main():
                               file=sys.stderr, flush=True)
             if connexion is not None and len(rtts) == args.count:
                 break
-            time.sleep(2)
+            time.sleep(args.interval)
     except KeyboardInterrupt:
         pass
     finally:

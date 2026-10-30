@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Capteurs IoT</title>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="/config.js"></script>
     <style>
       body {
         font-family: Arial, sans-serif;
@@ -66,6 +67,7 @@
   </head>
   <body>
     <h1>Capteurs de température et humidité</h1>
+    <p id="backend-info" style="text-align:center;color:#555;font-size:0.9em;"></p>
     <div id="error" class="error"></div>
     <div class="dashboard">
       <section class="panel" id="temp-panel">
@@ -98,9 +100,11 @@
     </div>
 
     <script>
-      const BACKEND = 'http://localhost:8080';
-      const ERROR_MESSAGE = 'Erreur de connexion au back-end. Les nouvelles données seront tentées à nouveau dans 3 secondes.';
+      const BACKEND = window.BACKEND_URL || 'http://10.196.122.36:8080';
+      const ERROR_MESSAGE = `Erreur de connexion au back-end (${BACKEND}). Les nouvelles données seront tentées à nouveau dans 3 secondes.`;
       const MAX_POINTS = 30;
+
+      document.getElementById('backend-info').textContent = `Backend : ${BACKEND}`;
 
       const tempChart = new Chart(document.getElementById('temp-chart'), {
         type: 'line',

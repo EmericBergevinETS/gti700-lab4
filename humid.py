@@ -13,7 +13,7 @@
 import RPi.GPIO as GPIO
 import time
 
-DHTPIN = 17
+DHTPIN = 22
 
 GPIO.setmode(GPIO.BCM)
 

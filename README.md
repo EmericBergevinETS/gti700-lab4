@@ -10,9 +10,27 @@ Ce laboratoire consiste à construire un système simple d'acquisition et d'affi
 
 - `backend.js` : serveur principal du backend sur le port 8080
 - `frontend.js` : serveur du frontend sur le port 8889
-- `sensor.js` : logique simulant l'acquisition de données de température et d'humidité
+- `sensor.js` : module d'acquisition (capteur réel via `messages.py`/`humid.py` ou simulation)
 - `public/index.html` : page web d'affichage
 - `package.json` : configuration du projet Node.js
+
+### 1.1 Module d'acquisition des capteurs (partie 1)
+
+`sensor.js` est le module JavaScript qui obtient les données du capteur DHT11 et conserve :
+
+- la dernière valeur de température et d'humidité lue ;
+- un historique de 720 mesures horodatées (une heure à raison d'une mesure aux 3 secondes).
+
+Sur le Raspberry Pi, il lance `messages.py` (qui réutilise le pilote `humid.py`) et lit son flux JSON.
+Ailleurs, ou avec `SENSOR_MODE=sim`, il génère des valeurs simulées.
+
+Le module peut être exécuté seul et imprime chaque lecture dans la console (tâche 1.1) :
+
+```bash
+node sensor.js
+```
+
+La fréquence d'acquisition peut être modifiée avec `SENSOR_INTERVAL_MS` (défaut : 3000 ms).
 
 ## 2. Installation
 
@@ -101,75 +119,85 @@ curl http://localhost:8889/affichage
 
 ## 6. Déploiement avec Raspberry Pi
 
-Quand vous aurez le Raspberry Pi, le système doit être divisé comme suit :
+Configuration utilisée : le **backend tourne sur le Raspberry Pi** et le **frontend sur l'ordinateur**.
+Le capteur DHT11 est branché sur la broche **GPIO22**.
 
-### Backend sur Raspberry Pi A
+### Backend sur le Raspberry Pi
 
-- Le Pi A exécute le serveur Node.js qui lit les données du capteur.
+- Le Pi exécute `backend.js`, qui lit le capteur DHT11 sur GPIO22 via `sensor.js` → `messages.py` → `humid.py`.
 - Il expose les API REST sur le port 8080.
 - Il doit être accessible sur le réseau local.
 
-Exemple d'architecture :
-
 ```text
-Raspberry Pi A (backend)
-  -> capteur de température/humidité
+Raspberry Pi (backend)
+  -> capteur DHT11 sur GPIO22
   -> node backend.js
-  -> http://<ip-pi-a>:8080/capteurs/...
+  -> http://<ip-pi>:8080/capteurs/...
 ```
 
-### Frontend sur Raspberry Pi B ou ordinateur B
+Trouver l'adresse IP du Pi :
 
-- Le Pi B ou l'ordinateur B exécute le serveur Node.js du frontend.
-- Il sert la page HTML sur le port 8889.
-- La page consomme les données du backend à travers des requêtes HTTP (fetch/AJAX).
-
-Exemple d'architecture :
-
-```text
-Raspberry Pi B / ordinateur B
-  -> node frontend.js
-  -> http://<ip-pi-b>:8889/affichage
+```bash
+hostname -I
 ```
 
-### Exemple de configuration réelle
-
-Dans le frontend, le backend est configuré par défaut comme ceci :
-
-```js
-const BACKEND = 'http://localhost:8080';
-```
-
-Quand le backend est déployé sur un autre appareil, il faut remplacer cette valeur par l'adresse IP du Raspberry Pi A :
-
-```js
-const BACKEND = 'http://192.168.1.25:8080';
-```
-
-### Démarrage sur Raspberry Pi
-
-Sur le Raspberry Pi A :
+Puis démarrer le backend sur le Pi :
 
 ```bash
 node backend.js
 ```
 
-Sur le Raspberry Pi B / ordinateur B :
+### Frontend sur l'ordinateur
 
-```bash
+- L'ordinateur exécute `frontend.js` et sert la page HTML sur le port 8889.
+- La page interroge le backend du Pi avec `fetch`.
+- L'adresse du backend est définie par `BACKEND_URL` dans `frontend.js` (actuellement
+  `http://10.196.122.36:8080`). Elle peut être remplacée par la variable d'environnement
+  `BACKEND_URL` sans modifier le code.
+
+Sur Windows (PowerShell) :
+
+```powershell
+$env:BACKEND_URL = "http://<ip-pi>:8080"
 node frontend.js
 ```
 
+Sur Linux/macOS :
+
+```bash
+BACKEND_URL="http://<ip-pi>:8080" node frontend.js
+```
+
+Puis ouvrir :
+
+```text
+http://localhost:8889/affichage
+```
+
+`frontend.js` expose l'adresse via `/config.js`, donc il n'est pas nécessaire de modifier
+`public/index.html`. Après une modification de `frontend.js`, il faut **redémarrer**
+`node frontend.js` et faire un rafraîchissement forcé du navigateur (`Ctrl+Shift+R`).
+
+La page affiche l'adresse du backend utilisée sous le titre, ce qui permet de vérifier
+rapidement qu'elle pointe vers le bon appareil.
+
 ### Lecture du vrai capteur
 
-Au lieu de `sensor.js` qui génère des valeurs aléatoires, il faudra remplacer cette partie par un module qui lit les données du capteur réel du Raspberry Pi.
+Le module `sensor.js` lance automatiquement `messages.py` (qui réutilise `humid.py`) lorsque
+le système est un Raspberry Pi (Linux). Le pilote lit le DHT11 sur **GPIO22**. Il lit les lignes
+JSON produites sur la sortie standard, met à jour l'historique et la dernière valeur, puis le
+backend expose ces données avec la même structure d'API. Sur un autre système (ou avec
+`SENSOR_MODE=sim`), des valeurs simulées sont utilisées.
 
-Typiquement :
+### Vérification depuis l'ordinateur
 
-- utiliser les broches GPIO du Raspberry Pi,
-- lire le capteur de température et d'humidité,
-- enregistrer les valeurs dans un historique,
-- exposer les APIs avec la même structure qu'ici.
+```bash
+curl http://<ip-pi>:8080/capteurs/temp
+curl http://<ip-pi>:8080/capteurs/hum
+```
+
+Si ces commandes échouent, vérifier que le Pi et l'ordinateur sont sur le même réseau et que
+le port 8080 n'est pas bloqué par un pare-feu.
 
 ## 7. Notes importantes
 
@@ -187,9 +215,18 @@ Typiquement :
 
 ## 9. Référence rapide
 
+Sur le Raspberry Pi (backend + capteur sur GPIO22) :
+
 ```bash
 npm install
 node backend.js
+```
+
+Sur l'ordinateur (frontend) :
+
+```powershell
+npm install
+$env:BACKEND_URL = "http://<ip-pi>:8080"
 node frontend.js
 ```
 
@@ -201,4 +238,5 @@ http://localhost:8889/affichage
 
 ---
 
-Ce README sert de base pour exécuter le projet localement et pour préparer le déploiement sur Raspberry Pi quand le matériel sera disponible.
+Ce README décrit l'exécution locale ainsi que le déploiement avec le backend sur le Raspberry Pi
+et le frontend sur l'ordinateur.
